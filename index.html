@@ -578,10 +578,10 @@ class GameUI {
 
   bindEvents() {
     this.el.battleArea.addEventListener('click', (e) => {
-      if (e.target.closest('.popup-overlay')) return;
+      if (this.isPopupOpen()) return;
       const r = this.gs.manualAttack(); if (r) this.handleEvent(r);
     });
-    this.el.gachaBtn.addEventListener('click', () => this.onGacha());
+    this.el.gachaBtn.addEventListener('click', () => { if (!this.isPopupOpen()) this.onGacha(); });
     this.el.ascendBtn.addEventListener('click', () => this.onAscend());
     this.el.resetBtn.addEventListener('click', () => {
       if (confirm('정말 초기화하시겠습니까?')) {
@@ -589,20 +589,27 @@ class GameUI {
         this.el.endingOverlay.classList.remove('show'); this.render();
       }
     });
-    this.el.equipNewBtn.addEventListener('click', () => {
+    this.el.equipNewBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (this.pendingItem) {
         this.gs.equipItem(this.pendingItem); this.pendingItem = null;
         this.el.comparePopup.classList.remove('show'); this.render(); saveGame(this.gs);
       }
     });
-    this.el.discardBtn.addEventListener('click', () => {
+    this.el.discardBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.pendingItem = null; this.el.comparePopup.classList.remove('show');
     });
+    this.el.comparePopup.addEventListener('click', (e) => { e.stopPropagation(); });
     this.el.ascendOverlay.addEventListener('click', () => this.el.ascendOverlay.classList.remove('show'));
     this.el.endingRestart.addEventListener('click', () => {
       localStorage.removeItem('imugi_save'); this.gs.reset();
       this.el.endingOverlay.classList.remove('show'); this.render();
     });
+  }
+
+  isPopupOpen() {
+    return this.el.comparePopup.classList.contains('show') || this.el.detailPopup.classList.contains('show');
   }
 
   onGacha() {
@@ -623,19 +630,22 @@ class GameUI {
   showCompare(newItem) {
     const currentItem = this.gs.equipment[newItem.slot];
     const slotInfo = SLOTS.find(s => s.id === newItem.slot);
+    const gradeFilter = (g) => g === 0 ? 'grayscale(100%) brightness(0.7)' : g === 1 ? 'grayscale(60%) brightness(0.85)' : g === 2 ? 'grayscale(30%) brightness(0.95)' : g === 3 ? 'brightness(1.05) saturate(1.2)' : 'brightness(1.15) saturate(1.4) drop-shadow(0 0 6px rgba(255,215,0,0.6))';
     let html = '<div class="compare-col">';
     html += '<div class="compare-col-title">현재 ' + slotInfo.name + '</div>';
     if (currentItem) {
       const curStats = getItemScaledStats(currentItem);
+      html += `<img src="${slotInfo.img}" style="width:48px;height:48px;object-fit:contain;margin:6px auto;display:block;filter:${gradeFilter(currentItem.grade)}">`;
       html += `<div class="compare-item-name" style="color:${GRADES[currentItem.grade].color}">${currentItem.name}</div>`;
       html += `<div class="compare-grade" style="color:${GRADES[currentItem.grade].color}">${GRADES[currentItem.grade].name} Lv.${currentItem.level}</div>`;
       for (const sd of STAT_DEFS) { if (curStats[sd.id] !== undefined) html += `<div class="compare-stat"><span>${sd.name}</span><span>${sd.fmt(curStats[sd.id])}</span></div>`; }
-    } else { html += '<div style="color:#556;margin-top:20px">비어있음</div>'; }
+    } else { html += `<img src="${slotInfo.img}" style="width:48px;height:48px;object-fit:contain;margin:6px auto;display:block;opacity:0.2">`; html += '<div style="color:#556;margin-top:8px">비어있음</div>'; }
     html += '</div>';
 
     const newStats = getItemScaledStats(newItem);
     const curStats = currentItem ? getItemScaledStats(currentItem) : {};
     html += '<div class="compare-col"><div class="compare-col-title">새 아이템</div>';
+    html += `<img src="${slotInfo.img}" style="width:48px;height:48px;object-fit:contain;margin:6px auto;display:block;filter:${gradeFilter(newItem.grade)}">`;
     html += `<div class="compare-item-name" style="color:${GRADES[newItem.grade].color}">${newItem.name}</div>`;
     html += `<div class="compare-grade" style="color:${GRADES[newItem.grade].color}">${GRADES[newItem.grade].name} Lv.1</div>`;
     for (const sd of STAT_DEFS) {
