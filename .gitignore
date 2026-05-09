@@ -1,0 +1,8 @@
+.venv/
+.claude/
+.omc/
+*.pyc
+.DS_Store
+캐릭터들.png
+assets/[0-9]*.png
+assets/back*.png

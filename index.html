@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>이무기의 여정</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e1a;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:390px;margin:0 auto;min-height:100vh;overflow-x:hidden;user-select:none}
+.container{display:flex;flex-direction:column;height:100vh;height:100dvh}
+
+.header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#0d1225}
+.header-left{display:flex;align-items:center;gap:6px}
+.player-form{font-size:14px;color:#c8a86e;font-weight:bold;display:flex;align-items:center;gap:4px}
+.player-form img{width:24px;height:24px;object-fit:contain}
+.ki-display{text-align:right;font-size:14px;color:#6ecf6e;font-weight:bold}
+
+.battle-area{position:relative;height:220px;flex-shrink:0;cursor:pointer;overflow:hidden;border-bottom:2px solid #1a2a15;background-size:cover;background-position:center}
+.stage-bar{position:absolute;top:8px;left:0;right:0;text-align:center;z-index:5}
+.stage-label{font-size:15px;font-weight:bold;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.8)}
+.kill-progress{display:flex;gap:3px;justify-content:center;margin-top:4px}
+.kill-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.2)}
+.kill-dot.filled{background:#6ecf6e}
+.kill-dot.boss{background:#e04040;width:14px;border-radius:3px}
+.kill-dot.boss.filled{background:#ff6060}
+.boss-label{font-size:12px;color:#e04040;font-weight:bold;margin-top:2px;text-shadow:0 1px 3px #000}
+
+.fighter{position:absolute;bottom:25%;text-align:center;z-index:3;transition:transform 0.15s}
+.fighter.player-fighter{left:8%}
+.fighter.enemy-fighter{right:8%}
+.fighter-sprite{height:80px;object-fit:contain;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.6))}
+.fighter-sprite.boss-sprite{height:100px}
+.fighter-name{font-size:11px;color:#ddd;margin-top:2px;text-shadow:0 1px 2px #000}
+.hp-bar-wrap{width:80px;height:7px;background:rgba(0,0,0,0.5);border-radius:4px;margin:0 auto 4px;overflow:hidden;border:1px solid rgba(255,255,255,0.2)}
+.hp-bar-fill{height:100%;border-radius:3px;transition:width 0.2s}
+.hp-bar-fill.player-hp{background:linear-gradient(90deg,#4CAF50,#66BB6A)}
+.hp-bar-fill.player-hp.low{background:linear-gradient(90deg,#e04040,#ff6060)}
+.hp-bar-fill.enemy-hp{background:linear-gradient(90deg,#e04040,#ff6060)}
+.hp-bar-fill.enemy-hp.boss-hp{background:linear-gradient(90deg,#9C27B0,#CE93D8)}
+.hp-text{font-size:9px;color:#ddd;margin-bottom:1px;text-shadow:0 1px 2px #000}
+
+.fighter.attacking-right{transform:translateX(35px)}
+.fighter.attacking-left{transform:translateX(-35px)}
+.fighter.hit{animation:hitFlash 0.15s}
+.fighter.dying{animation:deathAnim 0.4s forwards}
+.fighter.spawning{animation:spawnAnim 0.3s}
+
+.fighter.hit-red .fighter-sprite{animation:hitRed 0.35s}
+@keyframes hitRed{0%{filter:brightness(1) sepia(0) saturate(1)}15%{filter:brightness(1.3) sepia(1) saturate(5) hue-rotate(-20deg)}100%{filter:brightness(1) sepia(0) saturate(1)}}
+@keyframes deathAnim{to{transform:scale(0);opacity:0}}
+@keyframes spawnAnim{from{transform:scale(0) translateX(30px);opacity:0}to{transform:scale(1) translateX(0);opacity:1}}
+
+.beam-effect{position:absolute;z-index:8;pointer-events:none}
+.beam-t0{width:20px;height:20px;border-radius:50%;background:radial-gradient(circle,#fff,#90ee90,#4a4);box-shadow:0 0 10px #6c6,0 0 25px rgba(100,200,100,0.6);animation:beamFly 0.22s linear forwards}
+.beam-t1{width:28px;height:28px;border-radius:50%;background:radial-gradient(circle,#fff,#7af,#24f);box-shadow:0 0 18px #3af,0 0 40px rgba(60,160,255,0.6),0 0 60px rgba(60,100,255,0.3);animation:beamFly 0.22s linear forwards}
+.beam-t1::after{content:'';position:absolute;top:50%;left:-20px;width:30px;height:6px;transform:translateY(-50%);background:linear-gradient(90deg,transparent,rgba(100,180,255,0.8));border-radius:3px}
+.beam-t2{width:120px;height:14px;border-radius:7px;background:linear-gradient(90deg,rgba(0,255,255,0.2),#0ff,#0af,#0ff,rgba(0,255,255,0.2));box-shadow:0 0 20px #0af,0 0 50px rgba(0,170,255,0.5),0 0 80px rgba(0,100,255,0.2);animation:beamFly 0.2s linear forwards}
+.beam-t2::after{content:'';position:absolute;top:50%;left:0;right:0;height:4px;transform:translateY(-50%);background:#fff;border-radius:2px;opacity:0.7}
+.beam-t3{width:140px;height:20px;border-radius:10px;background:linear-gradient(90deg,rgba(255,215,0,0.1),#ffd700,#fff,#ffd700,rgba(255,215,0,0.1));box-shadow:0 0 30px #ffd700,0 0 60px rgba(255,215,0,0.6),0 0 100px rgba(255,170,0,0.3);animation:beamFly 0.18s linear forwards}
+.beam-t3::after{content:'';position:absolute;top:50%;left:0;right:0;height:6px;transform:translateY(-50%);background:#fff;border-radius:3px;opacity:0.8}
+.beam-t4{width:160px;height:28px;border-radius:4px;background:linear-gradient(90deg,rgba(255,100,0,0.1),#ff6600,#ff3300,#fff,#ff3300,#ff0000,rgba(255,0,0,0.1));box-shadow:0 0 35px #ff4400,0 0 70px rgba(255,68,0,0.6),0 0 120px rgba(255,0,0,0.3);animation:beamFly 0.18s linear forwards}
+.beam-t4::before{content:'';position:absolute;inset:-6px;border-radius:8px;background:linear-gradient(90deg,transparent,rgba(255,200,50,0.5),rgba(255,100,0,0.3),transparent);animation:breathPulse 0.08s infinite}
+.beam-t4::after{content:'';position:absolute;top:50%;left:0;right:0;height:8px;transform:translateY(-50%);background:linear-gradient(90deg,transparent,#fff,#ffa,#fff,transparent);border-radius:4px;opacity:0.9}
+@keyframes beamFly{0%{left:20%;opacity:1;transform:scaleX(0.3)}30%{opacity:1;transform:scaleX(1)}100%{left:58%;opacity:0;transform:scaleX(0.8)}}
+@keyframes breathPulse{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.8)}}
+
+.beam-enemy{width:16px;height:16px;border-radius:50%;background:radial-gradient(circle,#fff,#f66,#a22);box-shadow:0 0 12px #f44,0 0 30px rgba(255,60,60,0.5);animation:beamFlyEnemy 0.25s linear forwards}
+@keyframes beamFlyEnemy{0%{right:20%;opacity:1}100%{right:58%;opacity:0}}
+
+.battle-area.shake{animation:screenShake 0.15s}
+@keyframes screenShake{0%{transform:translate(0)}25%{transform:translate(-3px,2px)}50%{transform:translate(3px,-2px)}75%{transform:translate(-2px,1px)}100%{transform:translate(0)}}
+
+.damage-number{position:absolute;font-weight:bold;font-size:16px;color:#fff;pointer-events:none;z-index:10;animation:dmgFloat 0.7s forwards;text-shadow:0 1px 3px #000}
+.damage-number.crit{font-size:22px;color:#FFD700}
+.damage-number.player-dmg{color:#ff6060}
+@keyframes dmgFloat{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-35px)}}
+
+.battle-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;font-weight:bold;z-index:15;pointer-events:none;animation:msgFade 1.5s forwards;text-shadow:0 2px 6px rgba(0,0,0,0.8)}
+@keyframes msgFade{0%{opacity:1;transform:translate(-50%,-50%) scale(1.2)}30%{transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(0.9)}}
+
+.tap-hint{position:absolute;bottom:8px;right:10px;font-size:10px;color:rgba(255,255,255,0.3);z-index:5}
+
+.stats-bar{display:flex;gap:8px;padding:6px 12px;background:#0d1225;font-size:11px;color:#8899bb;flex-wrap:wrap;justify-content:center;border-bottom:1px solid #1a2030}
+.stat-item{white-space:nowrap}
+.stat-val{color:#e0e0e0;font-weight:bold}
+
+.equip-section{padding:10px 12px}
+.equip-title{font-size:13px;color:#8899bb;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.equip-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.equip-slot{background:#111828;border:2px solid #1e2740;border-radius:8px;padding:8px 4px;text-align:center;cursor:pointer;transition:border-color 0.2s;min-height:90px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.equip-slot:active{opacity:0.7}
+.equip-slot .slot-icon{width:32px;height:32px;object-fit:contain}
+.equip-slot .slot-name{font-size:10px;color:#556}
+.equip-slot .slot-grade{font-size:11px;font-weight:bold}
+.equip-slot .slot-level{font-size:10px;color:#8899bb}
+.equip-slot.empty .slot-icon{opacity:0.3}
+
+.grade-0{border-color:#666}.grade-0 .slot-grade{color:#999}.grade-0 .slot-icon{filter:grayscale(100%) brightness(0.7)}
+.grade-1{border-color:#4CAF50}.grade-1 .slot-grade{color:#4CAF50}.grade-1 .slot-icon{filter:grayscale(60%) brightness(0.85)}
+.grade-2{border-color:#2196F3}.grade-2 .slot-grade{color:#2196F3}.grade-2 .slot-icon{filter:grayscale(30%) brightness(0.95)}
+.grade-3{border-color:#9C27B0}.grade-3 .slot-grade{color:#9C27B0}.grade-3 .slot-icon{filter:grayscale(0%) brightness(1.05) saturate(1.2)}
+.grade-4{border-color:#FFD700}.grade-4 .slot-grade{color:#FFD700}.grade-4 .slot-icon{filter:grayscale(0%) brightness(1.15) saturate(1.4) drop-shadow(0 0 6px rgba(255,215,0,0.6))}
+
+.controls{padding:10px 12px;display:flex;flex-direction:column;gap:8px;margin-top:auto;padding-bottom:max(16px,env(safe-area-inset-bottom))}
+.gacha-btn{width:100%;padding:14px;border:none;border-radius:8px;font-size:15px;font-weight:bold;cursor:pointer;background:linear-gradient(135deg,#1a3a5c,#0f2740);color:#4dabf7;border:1px solid #2a4a6c;transition:opacity 0.2s}
+.gacha-btn:active{opacity:0.7}
+.gacha-btn:disabled{opacity:0.4;cursor:default}
+.bottom-row{display:flex;gap:8px}
+.ascend-btn{flex:1;padding:12px;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;background:linear-gradient(135deg,#c8a86e,#a07030);color:#0a0e1a;display:none}
+.ascend-btn.show{display:block}
+.ascend-btn:active{opacity:0.7}
+.reset-btn{padding:10px 14px;border:1px solid #333;background:none;color:#556;border-radius:8px;font-size:12px;cursor:pointer}
+
+.popup-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.3s}
+.popup-overlay.show{opacity:1;pointer-events:auto}
+.popup-box{background:#111828;border-radius:12px;width:90%;max-width:360px;overflow:hidden}
+.popup-title{text-align:center;padding:12px;font-size:16px;font-weight:bold;color:#c8a86e;border-bottom:1px solid #1e2740}
+.compare-cols{display:grid;grid-template-columns:1fr 1fr;min-height:180px}
+.compare-col{padding:12px;display:flex;flex-direction:column;gap:4px}
+.compare-col:first-child{border-right:1px solid #1e2740}
+.compare-col-title{font-size:11px;color:#556;margin-bottom:4px}
+.compare-item-name{font-size:13px;font-weight:bold;margin-bottom:2px}
+.compare-grade{font-size:11px;margin-bottom:6px}
+.compare-stat{font-size:12px;display:flex;justify-content:space-between;align-items:center}
+.stat-up{color:#4CAF50}
+.stat-down{color:#e04040}
+.stat-new{color:#FFD700}
+.popup-actions{display:flex;border-top:1px solid #1e2740}
+.popup-actions button{flex:1;padding:14px;border:none;font-size:14px;font-weight:bold;cursor:pointer;transition:opacity 0.2s}
+.popup-actions button:active{opacity:0.7}
+.popup-actions .equip-action{background:#1a3a5c;color:#4dabf7}
+.popup-actions .discard-action{background:#2a1520;color:#e04040}
+
+.detail-content{padding:16px}
+.detail-name{font-size:16px;font-weight:bold;margin-bottom:4px}
+.detail-grade{font-size:12px;margin-bottom:8px}
+.detail-stats{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;padding:10px;background:#0a0e1a;border-radius:6px}
+.detail-stat{font-size:13px;display:flex;justify-content:space-between}
+.detail-level{font-size:13px;color:#8899bb;margin-bottom:8px}
+.upgrade-btn{width:100%;padding:12px;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;background:#1a3a1a;color:#6ecf6e;border:1px solid #2a5a2a}
+.upgrade-btn:disabled{opacity:0.4;cursor:default}
+.upgrade-btn:active:not(:disabled){opacity:0.7}
+.close-btn{width:100%;padding:12px;border:none;background:#1e2740;color:#8899bb;font-size:13px;cursor:pointer;margin-top:8px;border-radius:8px}
+
+.ascend-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.92);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.6s}
+.ascend-overlay.show{opacity:1;pointer-events:auto}
+.ascend-img{width:120px;height:120px;object-fit:contain;margin-bottom:16px}
+.ascend-title{font-size:22px;color:#c8a86e;font-weight:bold;margin-bottom:8px}
+.ascend-text{font-size:15px;color:#8899bb;text-align:center;padding:0 30px;line-height:1.6;margin-bottom:24px}
+.ascend-dismiss{font-size:12px;color:#556}
+
+.ending-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(180deg,#0a0e1a,#1a1030,#2a1040);z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.8s}
+.ending-overlay.show{opacity:1;pointer-events:auto}
+.ending-img{width:140px;height:140px;object-fit:contain;margin-bottom:16px}
+.ending-title{font-size:24px;color:#c8a86e;font-weight:bold;margin-bottom:8px}
+.ending-text{font-size:16px;color:#8899bb;margin-bottom:24px}
+.ending-restart{padding:12px 30px;border:1px solid #c8a86e;background:none;color:#c8a86e;border-radius:8px;font-size:14px;cursor:pointer}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <div class="header-left">
+      <span class="player-form" id="playerForm"></span>
+    </div>
+    <div class="ki-display">⚡ <span id="kiValue">0</span></div>
+  </div>
+
+  <div class="battle-area" id="battleArea">
+    <div class="stage-bar">
+      <div class="stage-label" id="stageLabel">스테이지 1</div>
+      <div class="kill-progress" id="killProgress"></div>
+    </div>
+    <div class="fighter player-fighter" id="playerFighter">
+      <div class="hp-bar-wrap"><div class="hp-bar-fill player-hp" id="playerHpBar" style="width:100%"></div></div>
+      <div class="hp-text" id="playerHpText">100/100</div>
+      <img class="fighter-sprite" id="playerSprite" src="assets/player_1.png" alt="">
+    </div>
+    <div class="fighter enemy-fighter" id="enemyFighter">
+      <div class="hp-bar-wrap"><div class="hp-bar-fill enemy-hp" id="enemyHpBar" style="width:100%"></div></div>
+      <div class="hp-text" id="enemyHpText">50/50</div>
+      <img class="fighter-sprite" id="enemySprite" src="assets/enemy_1.png" alt="">
+    </div>
+    <div class="tap-hint">탭하여 공격!</div>
+  </div>
+
+  <div class="stats-bar" id="statsBar"></div>
+
+  <div class="equip-section">
+    <div class="equip-title">
+      <span>장비</span>
+      <span id="equipProgress" style="font-size:11px;color:#556"></span>
+    </div>
+    <div class="equip-grid" id="equipGrid"></div>
+  </div>
+
+  <div class="controls">
+    <button class="gacha-btn" id="gachaBtn">🎲 아이템 뽑기 (100 기운)</button>
+    <div class="bottom-row">
+      <button class="ascend-btn" id="ascendBtn">⚡ 승천하기</button>
+      <button class="reset-btn" id="resetBtn">초기화</button>
+    </div>
+  </div>
+</div>
+
+<div class="popup-overlay" id="comparePopup">
+  <div class="popup-box">
+    <div class="popup-title">아이템 비교</div>
+    <div class="compare-cols" id="compareCols"></div>
+    <div class="popup-actions">
+      <button class="equip-action" id="equipNewBtn">장착하기</button>
+      <button class="discard-action" id="discardBtn">버리기</button>
+    </div>
+  </div>
+</div>
+
+<div class="popup-overlay" id="detailPopup">
+  <div class="popup-box">
+    <div class="popup-title">장비 상세</div>
+    <div class="detail-content" id="detailContent"></div>
+  </div>
+</div>
+
+<div class="ascend-overlay" id="ascendOverlay">
+  <img class="ascend-img" id="ascendImg" src="" alt="">
+  <div class="ascend-title" id="ascendTitle"></div>
+  <div class="ascend-text" id="ascendText"></div>
+  <div class="ascend-dismiss">화면을 터치하세요</div>
+</div>
+
+<div class="ending-overlay" id="endingOverlay">
+  <img class="ending-img" src="assets/player_5.png" alt="">
+  <div class="ending-title">축하합니다! 용이 되었습니다!</div>
+  <div class="ending-text">이무기의 여정이 끝났습니다</div>
+  <button class="ending-restart" id="endingRestart">처음부터 다시</button>
+</div>
+
+<script>
+const TIERS = [
+  { name: '작은 뱀',    img: 'assets/player_1.png', bg: 'assets/bg_1.png', hp:100, atk:10, spd:1.0, cr:5,  cd:150, ls:0, regen:1 },
+  { name: '이무기(소)', img: 'assets/player_2.png', bg: 'assets/bg_1.png', hp:300, atk:30, spd:1.2, cr:8,  cd:160, ls:2, regen:3 },
+  { name: '이무기(대)', img: 'assets/player_3.png', bg: 'assets/bg_2.png', hp:800, atk:80, spd:1.4, cr:10, cd:170, ls:3, regen:8 },
+  { name: '천년 이무기', img: 'assets/player_4.png', bg: 'assets/bg_2.png', hp:2000,atk:200,spd:1.6, cr:12, cd:180, ls:5, regen:20},
+  { name: '용',         img: 'assets/player_5.png', bg: 'assets/bg_3.png', hp:5000,atk:500,spd:2.0, cr:15, cd:200, ls:8, regen:50},
+];
+
+const ASCEND_TEXTS = [
+  '차가운 연못 속, 눈을 뜬다...',
+  '비늘이 단단해진다. 강물이 요동친다.',
+  '하늘의 기운을 느낀다. 천 년의 기다림이 시작된다.',
+  '여의주가 빛난다! 이무기가 하늘로 솟는다!',
+];
+
+const GRADES = [
+  { name: '범(凡)', color: '#999',    mult: 1.0, statCount: [1,2], dropRate: 0.50 },
+  { name: '영(靈)', color: '#4CAF50', mult: 1.5, statCount: [2,3], dropRate: 0.25 },
+  { name: '선(仙)', color: '#2196F3', mult: 2.5, statCount: [2,3], dropRate: 0.15 },
+  { name: '신(神)', color: '#9C27B0', mult: 4.0, statCount: [3,4], dropRate: 0.08 },
+  { name: '천(天)', color: '#FFD700', mult: 6.0, statCount: [3,4], dropRate: 0.02 },
+];
+
+const SLOTS = [
+  { id: 'pearl', name: '여의주', img: 'assets/equip_pearl.png' },
+  { id: 'horn',  name: '뿔',    img: 'assets/equip_horn.png' },
+  { id: 'claw',  name: '발톱',  img: 'assets/equip_claw.png' },
+  { id: 'tail',  name: '꼬리',  img: 'assets/equip_tail.png' },
+];
+
+const STAT_DEFS = [
+  { id: 'atk',   name: '공격력',      min: 1,   max: 5,   fmt: v => '+' + v.toFixed(1) },
+  { id: 'hp',    name: '체력',        min: 5,   max: 25,  fmt: v => '+' + v.toFixed(0) },
+  { id: 'spd',   name: '공격속도',    min: 0.02,max: 0.10,fmt: v => '+' + v.toFixed(2) },
+  { id: 'cr',    name: '치명타 확률', min: 0.5, max: 3,   fmt: v => '+' + v.toFixed(1) + '%' },
+  { id: 'cd',    name: '치명타 피해', min: 3,   max: 15,  fmt: v => '+' + v.toFixed(1) + '%' },
+  { id: 'ls',    name: '생명력 흡수', min: 0.3, max: 2,   fmt: v => '+' + v.toFixed(1) + '%' },
+  { id: 'regen', name: '생명력 재생', min: 0.2, max: 1,   fmt: v => '+' + v.toFixed(1) + '/초' },
+];
+
+const GRADE_PREFIXES = [
+  ['낡은','평범한','흔한'],
+  ['영험한','빛나는','단련된'],
+  ['신비한','선계의','불멸의'],
+  ['신령한','축복받은','신성한'],
+  ['천상의','전설의','태초의'],
+];
+
+const ENEMIES = [
+  { name: '들쥐',   img: 'assets/enemy_1.png' },
+  { name: '산토끼', img: 'assets/enemy_2.png' },
+  { name: '너구리', img: 'assets/enemy_3.png' },
+  { name: '멧돼지', img: 'assets/enemy_4.png' },
+  { name: '늑대',   img: 'assets/enemy_5.png' },
+  { name: '곰',     img: 'assets/enemy_6.png' },
+  { name: '호랑이', img: 'assets/enemy_7.png' },
+  { name: '독수리', img: 'assets/enemy_8.png' },
+  { name: '구미호', img: 'assets/enemy_9.png' },
+  { name: '도깨비', img: 'assets/enemy_10.png' },
+];
+
+const GACHA_COST = 100;
+const MAX_ITEM_LEVEL = 10;
+const KILLS_PER_STAGE = 10;
+
+function rand(min, max) { return min + Math.random() * (max - min); }
+function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function rollGrade() {
+  const r = Math.random();
+  let acc = 0;
+  for (let i = 0; i < GRADES.length; i++) {
+    acc += GRADES[i].dropRate;
+    if (r < acc) return i;
+  }
+  return 0;
+}
+
+function generateItem(tier) {
+  const slotIdx = randInt(0, SLOTS.length - 1);
+  const gradeIdx = rollGrade();
+  const grade = GRADES[gradeIdx];
+  const tierMult = Math.pow(2, tier);
+  const statCount = randInt(grade.statCount[0], grade.statCount[1]);
+  const available = [...STAT_DEFS];
+  const stats = {};
+  for (let i = 0; i < Math.min(statCount, available.length); i++) {
+    const idx = randInt(0, available.length - 1);
+    const sd = available.splice(idx, 1)[0];
+    stats[sd.id] = rand(sd.min, sd.max) * grade.mult * tierMult;
+  }
+  const prefix = pick(GRADE_PREFIXES[gradeIdx]);
+  return { slot: SLOTS[slotIdx].id, grade: gradeIdx, name: prefix + ' ' + SLOTS[slotIdx].name, stats, level: 1 };
+}
+
+function getItemScaledStats(item) {
+  if (!item) return {};
+  const mult = 1 + (item.level - 1) * 0.15;
+  const s = {};
+  for (const [k, v] of Object.entries(item.stats)) s[k] = v * mult;
+  return s;
+}
+
+function upgradeCost(item, tier) { return item.level * 50 * (tier + 1); }
+function getEnemyForStage(stage) { return ENEMIES[(stage - 1) % ENEMIES.length]; }
+
+
+// ============================================================
+// GameState
+// ============================================================
+
+class GameState {
+  constructor() { this.reset(); }
+
+  reset() {
+    this.ki = 0; this.tier = 0; this.stage = 1; this.killCount = 0; this.isBoss = false;
+    this.equipment = { pearl: null, horn: null, claw: null, tail: null };
+    this.playerHp = this.getMaxHp();
+    this.playerAttackTimer = 0; this.enemyAttackTimer = 0;
+    this.enemy = null; this.ended = false; this.deathCooldown = 0;
+    this.spawnEnemy();
+  }
+
+  serialize() {
+    return { ki: this.ki, tier: this.tier, stage: this.stage, killCount: this.killCount,
+      isBoss: this.isBoss, equipment: this.equipment, playerHp: this.playerHp };
+  }
+
+  deserialize(d) {
+    if (!d) return false;
+    this.ki = d.ki || 0; this.tier = d.tier || 0; this.stage = d.stage || 1;
+    this.killCount = d.killCount || 0; this.isBoss = d.isBoss || false;
+    this.equipment = d.equipment || { pearl:null, horn:null, claw:null, tail:null };
+    this.playerHp = d.playerHp || this.getMaxHp();
+    this.ended = this.tier >= TIERS.length - 1;
+    this.playerAttackTimer = 0; this.enemyAttackTimer = 0; this.deathCooldown = 0;
+    this.spawnEnemy();
+    return true;
+  }
+
+  getTier() { return TIERS[this.tier]; }
+
+  getTotalStats() {
+    const base = this.getTier();
+    const s = { hp:base.hp, atk:base.atk, spd:base.spd, cr:base.cr, cd:base.cd, ls:base.ls, regen:base.regen };
+    for (const slot of SLOTS) {
+      const item = this.equipment[slot.id];
+      if (!item) continue;
+      const is = getItemScaledStats(item);
+      for (const [k, v] of Object.entries(is)) s[k] = (s[k] || 0) + v;
+    }
+    return s;
+  }
+
+  getMaxHp() { return this.getTotalStats().hp; }
+
+  spawnEnemy() {
+    const info = getEnemyForStage(this.stage);
+    const s = this.stage;
+    if (this.isBoss) {
+      this.enemy = { name:'대왕 '+info.name, img:info.img, hp:(30+s*25)*5, maxHp:(30+s*25)*5, atk:(3+s*2.5)*2, interval:1.5, isBoss:true };
+    } else {
+      this.enemy = { name:info.name, img:info.img, hp:30+s*25, maxHp:30+s*25, atk:3+s*2.5, interval:2.0, isBoss:false };
+    }
+    this.enemyAttackTimer = 0;
+  }
+
+  playerAttack() {
+    if (!this.enemy || this.ended || this.deathCooldown > 0) return null;
+    const stats = this.getTotalStats();
+    let dmg = stats.atk * rand(0.9, 1.1);
+    let isCrit = false;
+    if (Math.random() * 100 < stats.cr) { dmg *= stats.cd / 100; isCrit = true; }
+    dmg = Math.floor(dmg);
+    this.enemy.hp -= dmg;
+    const heal = Math.floor(dmg * stats.ls / 100);
+    if (heal > 0) this.playerHp = Math.min(this.getMaxHp(), this.playerHp + heal);
+    const killed = this.enemy.hp <= 0;
+    let result = { dmg, isCrit, killed, kiGained:0, stageClear:false, bossAppear:false };
+    if (killed) {
+      this.enemy.hp = 0;
+      const kiReward = this.isBoss ? (30 + this.stage * 15) : (5 + this.stage * 3);
+      this.ki += kiReward; result.kiGained = kiReward;
+      if (this.isBoss) { this.stage++; this.killCount = 0; this.isBoss = false; result.stageClear = true; }
+      else { this.killCount++; if (this.killCount >= KILLS_PER_STAGE) { this.isBoss = true; result.bossAppear = true; } }
+    }
+    return result;
+  }
+
+  enemyAttack() {
+    if (!this.enemy || this.ended || this.deathCooldown > 0) return null;
+    const dmg = Math.floor(this.enemy.atk * rand(0.9, 1.1));
+    this.playerHp -= dmg;
+    const died = this.playerHp <= 0;
+    if (died) { this.playerHp = 0; this.stage = Math.max(1, this.stage - 1); this.killCount = 0; this.isBoss = false; this.deathCooldown = 1.5; }
+    return { dmg, died };
+  }
+
+  respawn() { this.playerHp = this.getMaxHp(); this.spawnEnemy(); }
+
+  tick(dt) {
+    if (this.ended) return [];
+    const events = []; const stats = this.getTotalStats();
+    if (this.deathCooldown > 0) {
+      this.deathCooldown -= dt;
+      if (this.deathCooldown <= 0) { this.deathCooldown = 0; this.respawn(); events.push({ type:'respawn' }); }
+      return events;
+    }
+    if (this.playerHp < this.getMaxHp()) this.playerHp = Math.min(this.getMaxHp(), this.playerHp + stats.regen * dt);
+    this.playerAttackTimer += dt;
+    const attackInterval = 1 / stats.spd;
+    if (this.playerAttackTimer >= attackInterval) {
+      this.playerAttackTimer -= attackInterval;
+      const r = this.playerAttack(); if (r) events.push({ type:'playerAttack', ...r });
+    }
+    if (this.enemy && this.enemy.hp > 0) {
+      this.enemyAttackTimer += dt;
+      if (this.enemyAttackTimer >= this.enemy.interval) {
+        this.enemyAttackTimer -= this.enemy.interval;
+        const r = this.enemyAttack(); if (r) events.push({ type:'enemyAttack', ...r });
+      }
+    }
+    return events;
+  }
+
+  manualAttack() { const r = this.playerAttack(); return r ? { type:'playerAttack', ...r } : null; }
+  drawItem() { if (this.ki < GACHA_COST) return null; this.ki -= GACHA_COST; return generateItem(this.tier); }
+  equipItem(item) { this.equipment[item.slot] = item; this.playerHp = Math.min(this.playerHp, this.getMaxHp()); }
+
+  upgradeItem(slotId) {
+    const item = this.equipment[slotId];
+    if (!item || item.level >= MAX_ITEM_LEVEL) return false;
+    const cost = upgradeCost(item, this.tier);
+    if (this.ki < cost) return false;
+    this.ki -= cost; item.level++; return true;
+  }
+
+  canAscend() {
+    if (this.tier >= TIERS.length - 1) return false;
+    for (const slot of SLOTS) { const item = this.equipment[slot.id]; if (!item || item.level < MAX_ITEM_LEVEL) return false; }
+    return true;
+  }
+
+  ascend() {
+    if (!this.canAscend()) return null;
+    const text = ASCEND_TEXTS[this.tier];
+    this.tier++;
+    this.equipment = { pearl:null, horn:null, claw:null, tail:null };
+    this.stage = 1; this.killCount = 0; this.isBoss = false;
+    this.playerHp = this.getMaxHp(); this.spawnEnemy();
+    if (this.tier >= TIERS.length - 1) this.ended = true;
+    return { text, img: this.getTier().img, name: this.getTier().name, isEnding: this.ended };
+  }
+}
+
+
+// ============================================================
+// GameUI
+// ============================================================
+
+class GameUI {
+  constructor(gs) {
+    this.gs = gs; this.el = {}; this.pendingItem = null;
+    this.cacheElements(); this.bindEvents();
+  }
+
+  cacheElements() {
+    const ids = ['playerForm','kiValue','stageLabel','killProgress','playerFighter','enemyFighter',
+      'playerHpBar','playerHpText','playerSprite','enemyHpBar','enemyHpText','enemySprite',
+      'statsBar','equipGrid','equipProgress','gachaBtn','ascendBtn','resetBtn','battleArea',
+      'comparePopup','compareCols','equipNewBtn','discardBtn',
+      'detailPopup','detailContent',
+      'ascendOverlay','ascendImg','ascendTitle','ascendText',
+      'endingOverlay','endingRestart'];
+    for (const id of ids) this.el[id] = document.getElementById(id);
+  }
+
+  bindEvents() {
+    this.el.battleArea.addEventListener('click', (e) => {
+      if (e.target.closest('.popup-overlay')) return;
+      const r = this.gs.manualAttack(); if (r) this.handleEvent(r);
+    });
+    this.el.gachaBtn.addEventListener('click', () => this.onGacha());
+    this.el.ascendBtn.addEventListener('click', () => this.onAscend());
+    this.el.resetBtn.addEventListener('click', () => {
+      if (confirm('정말 초기화하시겠습니까?')) {
+        localStorage.removeItem('imugi_save'); this.gs.reset();
+        this.el.endingOverlay.classList.remove('show'); this.render();
+      }
+    });
+    this.el.equipNewBtn.addEventListener('click', () => {
+      if (this.pendingItem) {
+        this.gs.equipItem(this.pendingItem); this.pendingItem = null;
+        this.el.comparePopup.classList.remove('show'); this.render(); saveGame(this.gs);
+      }
+    });
+    this.el.discardBtn.addEventListener('click', () => {
+      this.pendingItem = null; this.el.comparePopup.classList.remove('show');
+    });
+    this.el.ascendOverlay.addEventListener('click', () => this.el.ascendOverlay.classList.remove('show'));
+    this.el.endingRestart.addEventListener('click', () => {
+      localStorage.removeItem('imugi_save'); this.gs.reset();
+      this.el.endingOverlay.classList.remove('show'); this.render();
+    });
+  }
+
+  onGacha() {
+    const item = this.gs.drawItem(); if (!item) return;
+    this.pendingItem = item; this.showCompare(item); this.render(); saveGame(this.gs);
+  }
+
+  onAscend() {
+    const r = this.gs.ascend(); if (!r) return;
+    this.el.ascendImg.src = r.img;
+    this.el.ascendTitle.textContent = r.name + '(으)로 승천!';
+    this.el.ascendText.textContent = r.text;
+    this.el.ascendOverlay.classList.add('show');
+    if (r.isEnding) { setTimeout(() => { this.el.ascendOverlay.classList.remove('show'); this.el.endingOverlay.classList.add('show'); }, 3000); }
+    this.render(); saveGame(this.gs);
+  }
+
+  showCompare(newItem) {
+    const currentItem = this.gs.equipment[newItem.slot];
+    const slotInfo = SLOTS.find(s => s.id === newItem.slot);
+    let html = '<div class="compare-col">';
+    html += '<div class="compare-col-title">현재 ' + slotInfo.name + '</div>';
+    if (currentItem) {
+      const curStats = getItemScaledStats(currentItem);
+      html += `<div class="compare-item-name" style="color:${GRADES[currentItem.grade].color}">${currentItem.name}</div>`;
+      html += `<div class="compare-grade" style="color:${GRADES[currentItem.grade].color}">${GRADES[currentItem.grade].name} Lv.${currentItem.level}</div>`;
+      for (const sd of STAT_DEFS) { if (curStats[sd.id] !== undefined) html += `<div class="compare-stat"><span>${sd.name}</span><span>${sd.fmt(curStats[sd.id])}</span></div>`; }
+    } else { html += '<div style="color:#556;margin-top:20px">비어있음</div>'; }
+    html += '</div>';
+
+    const newStats = getItemScaledStats(newItem);
+    const curStats = currentItem ? getItemScaledStats(currentItem) : {};
+    html += '<div class="compare-col"><div class="compare-col-title">새 아이템</div>';
+    html += `<div class="compare-item-name" style="color:${GRADES[newItem.grade].color}">${newItem.name}</div>`;
+    html += `<div class="compare-grade" style="color:${GRADES[newItem.grade].color}">${GRADES[newItem.grade].name} Lv.1</div>`;
+    for (const sd of STAT_DEFS) {
+      if (newStats[sd.id] !== undefined) {
+        let arrow = '';
+        if (curStats[sd.id] !== undefined) { arrow = newStats[sd.id] > curStats[sd.id] ? ' <span class="stat-up">▲</span>' : newStats[sd.id] < curStats[sd.id] ? ' <span class="stat-down">▼</span>' : ''; }
+        else { arrow = ' <span class="stat-new">★</span>'; }
+        html += `<div class="compare-stat"><span>${sd.name}</span><span>${sd.fmt(newStats[sd.id])}${arrow}</span></div>`;
+      }
+    }
+    html += '</div>';
+    this.el.compareCols.innerHTML = html;
+    this.el.comparePopup.classList.add('show');
+  }
+
+  showItemDetail(slotId) {
+    const item = this.gs.equipment[slotId];
+    if (!item) return;
+    const stats = getItemScaledStats(item);
+    const cost = upgradeCost(item, this.gs.tier);
+    const canUpgrade = item.level < MAX_ITEM_LEVEL && this.gs.ki >= cost;
+    const isMax = item.level >= MAX_ITEM_LEVEL;
+    const slotInfo = SLOTS.find(s => s.id === slotId);
+
+    let html = `<div style="text-align:center;margin-bottom:8px"><img src="${slotInfo.img}" style="width:48px;height:48px;object-fit:contain"></div>`;
+    html += `<div class="detail-name" style="color:${GRADES[item.grade].color}">${item.name}</div>`;
+    html += `<div class="detail-grade" style="color:${GRADES[item.grade].color}">${GRADES[item.grade].name}</div>`;
+    html += `<div class="detail-level">레벨 ${item.level} / ${MAX_ITEM_LEVEL}</div>`;
+    html += '<div class="detail-stats">';
+    for (const sd of STAT_DEFS) { if (stats[sd.id] !== undefined) html += `<div class="detail-stat"><span>${sd.name}</span><span>${sd.fmt(stats[sd.id])}</span></div>`; }
+    html += '</div>';
+    if (isMax) html += '<div style="text-align:center;color:#FFD700;font-size:13px;margin-bottom:8px">최대 레벨 도달!</div>';
+    else html += `<button class="upgrade-btn" id="upgradeBtn" ${canUpgrade ? '' : 'disabled'}>⬆ 강화 (${formatNum(cost)} 기운)</button>`;
+    html += '<button class="close-btn" id="detailClose">닫기</button>';
+
+    this.el.detailContent.innerHTML = html;
+    this.el.detailPopup.classList.add('show');
+
+    const upgradeBtn = document.getElementById('upgradeBtn');
+    if (upgradeBtn) upgradeBtn.addEventListener('click', () => { if (this.gs.upgradeItem(slotId)) { this.showItemDetail(slotId); this.render(); saveGame(this.gs); } });
+    document.getElementById('detailClose').addEventListener('click', () => this.el.detailPopup.classList.remove('show'));
+  }
+
+  handleEvent(e) {
+    if (e.type === 'playerAttack') {
+      this.animateAttack('player');
+      if (e.dmg > 0) this.showDamage(e.dmg, e.isCrit, false);
+      if (e.killed) {
+        this.el.enemyFighter.classList.add('dying');
+        setTimeout(() => {
+          this.el.enemyFighter.classList.remove('dying');
+          if (e.stageClear) this.showBattleMsg('스테이지 클리어!', '#6ecf6e');
+          if (e.bossAppear) this.showBattleMsg('⚠️ 보스 등장!', '#e04040');
+          this.gs.spawnEnemy();
+          this.el.enemyFighter.classList.add('spawning');
+          setTimeout(() => this.el.enemyFighter.classList.remove('spawning'), 300);
+          this.render();
+        }, 400);
+      }
+    } else if (e.type === 'enemyAttack') {
+      this.animateAttack('enemy');
+      if (e.dmg > 0) this.showDamage(e.dmg, false, true);
+      if (e.died) this.showBattleMsg('쓰러졌다... 스테이지 하락', '#e04040');
+    } else if (e.type === 'respawn') {
+      this.el.enemyFighter.classList.add('spawning');
+      setTimeout(() => this.el.enemyFighter.classList.remove('spawning'), 300);
+    }
+  }
+
+  animateAttack(who) {
+    const el = who === 'player' ? this.el.playerFighter : this.el.enemyFighter;
+    const target = who === 'player' ? this.el.enemyFighter : this.el.playerFighter;
+    const cls = who === 'player' ? 'attacking-right' : 'attacking-left';
+    el.classList.add(cls);
+    if (who === 'player') {
+      const beam = document.createElement('div');
+      beam.className = 'beam-effect beam-t' + this.gs.tier;
+      beam.style.top = '45%';
+      this.el.battleArea.appendChild(beam);
+      setTimeout(() => beam.remove(), 300);
+    } else {
+      const beam = document.createElement('div');
+      beam.className = 'beam-effect beam-enemy';
+      beam.style.top = '45%';
+      this.el.battleArea.appendChild(beam);
+      setTimeout(() => beam.remove(), 350);
+    }
+    setTimeout(() => {
+      el.classList.remove(cls);
+      target.classList.add('hit-red');
+      this.el.battleArea.classList.add('shake');
+      setTimeout(() => { target.classList.remove('hit-red'); this.el.battleArea.classList.remove('shake'); }, 350);
+    }, 150);
+  }
+
+  showDamage(amount, isCrit, isPlayerDmg) {
+    const el = document.createElement('div');
+    el.className = 'damage-number' + (isCrit ? ' crit' : '') + (isPlayerDmg ? ' player-dmg' : '');
+    el.textContent = (isCrit ? '💥' : '') + amount;
+    el.style.left = ((isPlayerDmg ? 20 : 60) + rand(-10, 10)) + '%';
+    el.style.top = (25 + rand(-5, 5)) + '%';
+    this.el.battleArea.appendChild(el);
+    setTimeout(() => el.remove(), 700);
+  }
+
+  showBattleMsg(text, color) {
+    const el = document.createElement('div');
+    el.className = 'battle-msg'; el.textContent = text; el.style.color = color;
+    this.el.battleArea.appendChild(el);
+    setTimeout(() => el.remove(), 1500);
+  }
+
+  render() {
+    const tier = this.gs.getTier();
+    const stats = this.gs.getTotalStats();
+
+    this.el.playerForm.innerHTML = `<img src="${tier.img}" alt="">${tier.name}`;
+    this.el.kiValue.textContent = formatNum(Math.floor(this.gs.ki));
+    this.el.battleArea.style.backgroundImage = `url('${tier.bg}')`;
+    this.el.stageLabel.textContent = '스테이지 ' + this.gs.stage;
+
+    let dots = '';
+    if (this.gs.isBoss) { dots = '<div class="kill-dot boss filled"></div><div class="boss-label">BOSS</div>'; }
+    else { for (let i = 0; i < KILLS_PER_STAGE; i++) dots += `<div class="kill-dot ${i < this.gs.killCount ? 'filled' : ''}"></div>`; }
+    this.el.killProgress.innerHTML = dots;
+
+    this.el.playerSprite.src = tier.img;
+    const maxHp = this.gs.getMaxHp();
+    const hpPercent = Math.max(0, (this.gs.playerHp / maxHp) * 100);
+    this.el.playerHpBar.style.width = hpPercent + '%';
+    this.el.playerHpBar.className = 'hp-bar-fill player-hp' + (hpPercent < 30 ? ' low' : '');
+    this.el.playerHpText.textContent = Math.floor(this.gs.playerHp) + '/' + Math.floor(maxHp);
+
+    if (this.gs.enemy) {
+      const e = this.gs.enemy;
+      const eHpP = Math.max(0, (e.hp / e.maxHp) * 100);
+      this.el.enemySprite.src = e.img;
+      this.el.enemySprite.className = 'fighter-sprite' + (e.isBoss ? ' boss-sprite' : '');
+      this.el.enemyHpBar.style.width = eHpP + '%';
+      this.el.enemyHpBar.className = 'hp-bar-fill enemy-hp' + (e.isBoss ? ' boss-hp' : '');
+      this.el.enemyHpText.textContent = Math.floor(Math.max(0, e.hp)) + '/' + Math.floor(e.maxHp);
+    }
+
+    this.el.statsBar.innerHTML =
+      `<span class="stat-item">⚔️ <span class="stat-val">${Math.floor(stats.atk)}</span></span>` +
+      `<span class="stat-item">❤️ <span class="stat-val">${Math.floor(stats.hp)}</span></span>` +
+      `<span class="stat-item">⚡ <span class="stat-val">${stats.spd.toFixed(2)}</span></span>` +
+      `<span class="stat-item">🎯 <span class="stat-val">${stats.cr.toFixed(1)}%</span></span>` +
+      `<span class="stat-item">💥 <span class="stat-val">${stats.cd.toFixed(0)}%</span></span>` +
+      `<span class="stat-item">🩸 <span class="stat-val">${stats.ls.toFixed(1)}%</span></span>`;
+
+    let maxedCount = 0, equipHtml = '';
+    for (const slot of SLOTS) {
+      const item = this.gs.equipment[slot.id];
+      if (item) {
+        const isMax = item.level >= MAX_ITEM_LEVEL; if (isMax) maxedCount++;
+        equipHtml += `<div class="equip-slot grade-${item.grade}" data-slot="${slot.id}">` +
+          `<img class="slot-icon" src="${slot.img}">` +
+          `<div class="slot-grade">${GRADES[item.grade].name}</div>` +
+          `<div class="slot-level">Lv.${item.level}${isMax ? ' ✓' : ''}</div>` +
+          `<div class="slot-name">${slot.name}</div></div>`;
+      } else {
+        equipHtml += `<div class="equip-slot empty" data-slot="${slot.id}">` +
+          `<img class="slot-icon" src="${slot.img}">` +
+          `<div class="slot-name" style="color:#556">비어있음</div>` +
+          `<div class="slot-name">${slot.name}</div></div>`;
+      }
+    }
+    this.el.equipGrid.innerHTML = equipHtml;
+    this.el.equipProgress.textContent = `강화 ${maxedCount}/4`;
+
+    this.el.equipGrid.querySelectorAll('.equip-slot').forEach(el => {
+      el.addEventListener('click', () => { const slotId = el.dataset.slot; if (this.gs.equipment[slotId]) this.showItemDetail(slotId); });
+    });
+
+    this.el.gachaBtn.disabled = this.gs.ki < GACHA_COST;
+    this.el.gachaBtn.textContent = `🎲 아이템 뽑기 (${GACHA_COST} 기운)`;
+    if (this.gs.canAscend()) this.el.ascendBtn.classList.add('show'); else this.el.ascendBtn.classList.remove('show');
+    if (this.gs.ended) this.el.endingOverlay.classList.add('show');
+  }
+}
+
+
+// ============================================================
+// 유틸 & 메인 루프
+// ============================================================
+
+function formatNum(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 10000) return (n / 10000).toFixed(1) + '만';
+  if (n >= 1000) return n.toLocaleString('ko-KR');
+  return n.toString();
+}
+
+function saveGame(gs) { localStorage.setItem('imugi_save', JSON.stringify(gs.serialize())); }
+
+const gs = new GameState();
+const raw = localStorage.getItem('imugi_save');
+if (raw) { try { gs.deserialize(JSON.parse(raw)); } catch(e) {} }
+
+const ui = new GameUI(gs);
+ui.render();
+
+let saveTimer = 0;
+const TICK = 100;
+setInterval(() => {
+  const dt = TICK / 1000;
+  const events = gs.tick(dt);
+  for (const e of events) ui.handleEvent(e);
+  ui.render();
+  saveTimer += TICK;
+  if (saveTimer >= 5000) { saveTimer = 0; saveGame(gs); }
+}, TICK);
+</script>
+</body>
+</html>
