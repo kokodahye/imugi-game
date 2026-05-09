@@ -142,6 +142,17 @@ body{background:#0a0e1a;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFo
 .upgrade-btn:active:not(:disabled){opacity:0.7}
 .close-btn{width:100%;padding:12px;border:none;background:#1e2740;color:#8899bb;font-size:13px;cursor:pointer;margin-top:8px;border-radius:8px}
 
+.offline-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.88);z-index:150;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.3s}
+.offline-overlay.show{opacity:1;pointer-events:auto}
+.offline-box{background:#111828;border-radius:12px;width:85%;max-width:320px;padding:20px;text-align:center}
+.offline-title{font-size:16px;color:#c8a86e;font-weight:bold;margin-bottom:12px}
+.offline-time{font-size:13px;color:#8899bb;margin-bottom:14px}
+.offline-rewards{display:flex;flex-direction:column;gap:6px;margin-bottom:16px;padding:12px;background:#0a0e1a;border-radius:8px}
+.offline-reward{font-size:14px;display:flex;justify-content:space-between}
+.offline-reward .label{color:#8899bb}
+.offline-reward .value{color:#6ecf6e;font-weight:bold}
+.offline-ok{width:100%;padding:12px;border:none;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer;background:#1a3a5c;color:#4dabf7}
+
 .ascend-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.92);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.6s}
 .ascend-overlay.show{opacity:1;pointer-events:auto}
 .ascend-img{width:120px;height:120px;object-fit:contain;margin-bottom:16px}
@@ -212,6 +223,15 @@ body{background:#0a0e1a;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFo
       <button class="equip-action" id="equipNewBtn">장착하기</button>
       <button class="discard-action" id="discardBtn">버리기</button>
     </div>
+  </div>
+</div>
+
+<div class="offline-overlay" id="offlinePopup">
+  <div class="offline-box">
+    <div class="offline-title">⚔️ 자동 전투 결과</div>
+    <div class="offline-time" id="offlineTime"></div>
+    <div class="offline-rewards" id="offlineRewards"></div>
+    <button class="offline-ok" id="offlineOk">확인</button>
   </div>
 </div>
 
@@ -363,7 +383,7 @@ class GameState {
 
   serialize() {
     return { ki: this.ki, tier: this.tier, stage: this.stage, killCount: this.killCount,
-      isBoss: this.isBoss, equipment: this.equipment, playerHp: this.playerHp };
+      isBoss: this.isBoss, equipment: this.equipment, playerHp: this.playerHp, lastTime: Date.now() };
   }
 
   deserialize(d) {
@@ -437,6 +457,47 @@ class GameState {
   }
 
   respawn() { this.playerHp = this.getMaxHp(); this.spawnEnemy(); }
+
+  simulateOffline(seconds) {
+    if (this.ended || seconds < 10) return null;
+    const maxSeconds = 24 * 3600;
+    seconds = Math.min(seconds, maxSeconds);
+    const stats = this.getTotalStats();
+    const dps = stats.atk * stats.spd * (1 + (stats.cr / 100) * ((stats.cd - 100) / 100));
+    let totalKi = 0, kills = 0, stagesCleared = 0, elapsed = 0;
+    const startStage = this.stage;
+    this.playerHp = this.getMaxHp();
+    while (elapsed < seconds) {
+      if (!this.enemy || this.enemy.hp <= 0) this.spawnEnemy();
+      const enemyDps = this.enemy.atk / this.enemy.interval;
+      const netHps = stats.regen + dps * stats.ls / 100 - enemyDps;
+      if (netHps < -0.1 && this.playerHp / (-netHps) < 3) {
+        elapsed += 2; this.stage = Math.max(1, this.stage - 1);
+        this.killCount = 0; this.isBoss = false; this.playerHp = this.getMaxHp();
+        this.spawnEnemy(); continue;
+      }
+      const timeToKill = Math.max(0.5, this.enemy.hp / dps);
+      elapsed += timeToKill;
+      if (elapsed > seconds) break;
+      const kiReward = this.isBoss ? (30 + this.stage * 15) : (5 + this.stage * 3);
+      totalKi += kiReward; kills++;
+      this.playerHp = Math.min(this.getMaxHp(), this.playerHp + stats.regen * timeToKill);
+      this.playerHp -= enemyDps * timeToKill;
+      if (this.playerHp <= 0) {
+        this.stage = Math.max(1, this.stage - 1);
+        this.killCount = 0; this.isBoss = false; this.playerHp = this.getMaxHp();
+        this.spawnEnemy(); continue;
+      }
+      if (this.isBoss) { this.stage++; this.killCount = 0; this.isBoss = false; stagesCleared++; }
+      else { this.killCount++; if (this.killCount >= KILLS_PER_STAGE) this.isBoss = true; }
+      this.enemy.hp = 0;
+    }
+    this.ki += totalKi;
+    this.playerHp = this.getMaxHp();
+    this.spawnEnemy();
+    if (totalKi === 0 && kills === 0) return null;
+    return { seconds, totalKi, kills, stagesCleared, fromStage: startStage, toStage: this.stage };
+  }
 
   tick(dt) {
     if (this.ended) return [];
@@ -775,10 +836,35 @@ function saveGame(gs) { localStorage.setItem('imugi_save', JSON.stringify(gs.ser
 
 const gs = new GameState();
 const raw = localStorage.getItem('imugi_save');
-if (raw) { try { gs.deserialize(JSON.parse(raw)); } catch(e) {} }
+let offlineResult = null;
+if (raw) {
+  try {
+    const d = JSON.parse(raw);
+    gs.deserialize(d);
+    if (d.lastTime) {
+      const elapsed = (Date.now() - d.lastTime) / 1000;
+      offlineResult = gs.simulateOffline(elapsed);
+    }
+  } catch(e) {}
+}
 
 const ui = new GameUI(gs);
 ui.render();
+
+if (offlineResult) {
+  const r = offlineResult;
+  const h = Math.floor(r.seconds / 3600);
+  const m = Math.floor((r.seconds % 3600) / 60);
+  const timeStr = h > 0 ? `${h}시간 ${m}분` : `${m}분`;
+  document.getElementById('offlineTime').textContent = `${timeStr} 동안 자동 전투 진행`;
+  let html = `<div class="offline-reward"><span class="label">⚡ 획득 기운</span><span class="value">+${formatNum(r.totalKi)}</span></div>`;
+  html += `<div class="offline-reward"><span class="label">💀 처치 수</span><span class="value">${formatNum(r.kills)}마리</span></div>`;
+  if (r.stagesCleared > 0) html += `<div class="offline-reward"><span class="label">📍 스테이지</span><span class="value">${r.fromStage} → ${r.toStage}</span></div>`;
+  document.getElementById('offlineRewards').innerHTML = html;
+  document.getElementById('offlinePopup').classList.add('show');
+  document.getElementById('offlineOk').addEventListener('click', () => document.getElementById('offlinePopup').classList.remove('show'));
+  saveGame(gs);
+}
 
 let saveTimer = 0;
 const TICK = 100;
