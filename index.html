@@ -27,8 +27,8 @@ body{background:#0a0e1a;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFo
 
 .fighter{position:absolute;bottom:25%;text-align:center;z-index:3;transition:transform 0.15s}
 .fighter.player-fighter{left:8%}
-.fighter.enemy-fighter{right:8%}
-.fighter-sprite{height:80px;object-fit:contain;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.6))}
+.fighter.enemy-fighter{right:8%;max-width:40%;display:flex;flex-direction:column;align-items:center}
+.fighter-sprite{height:80px;max-height:120px;object-fit:contain;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.6))}
 .fighter-sprite.boss-sprite{height:100px}
 .fighter-name{font-size:11px;color:#ddd;margin-top:2px;text-shadow:0 1px 2px #000}
 .hp-bar-wrap{width:80px;height:7px;background:rgba(0,0,0,0.5);border-radius:4px;margin:0 auto 4px;overflow:hidden;border:1px solid rgba(255,255,255,0.2)}
@@ -193,7 +193,6 @@ body{background:#0a0e1a;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFo
       <div class="hp-text" id="enemyHpText">50/50</div>
       <img class="fighter-sprite" id="enemySprite" src="assets/enemy_1.png" alt="">
     </div>
-    <div class="tap-hint">탭하여 공격!</div>
   </div>
 
   <div class="stats-bar" id="statsBar"></div>
@@ -441,7 +440,7 @@ class GameState {
       this.enemy.hp = 0;
       const kiReward = this.isBoss ? (30 + this.stage * 15) : (5 + this.stage * 3);
       this.ki += kiReward; result.kiGained = kiReward;
-      if (this.isBoss) { this.stage++; this.killCount = 0; this.isBoss = false; result.stageClear = true; }
+      if (this.isBoss) { this.stage++; this.killCount = 0; this.isBoss = false; this.playerHp = this.getMaxHp(); result.stageClear = true; }
       else { this.killCount++; if (this.killCount >= KILLS_PER_STAGE) { this.isBoss = true; result.bossAppear = true; } }
     }
     return result;
@@ -577,10 +576,7 @@ class GameUI {
   }
 
   bindEvents() {
-    this.el.battleArea.addEventListener('click', (e) => {
-      if (this.isPopupOpen()) return;
-      const r = this.gs.manualAttack(); if (r) this.handleEvent(r);
-    });
+    this.el.battleArea.addEventListener('click', (e) => { e.stopPropagation(); });
     this.el.gachaBtn.addEventListener('click', () => { if (!this.isPopupOpen()) this.onGacha(); });
     this.el.ascendBtn.addEventListener('click', () => this.onAscend());
     this.el.resetBtn.addEventListener('click', () => {
